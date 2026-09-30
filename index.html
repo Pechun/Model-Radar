@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16181b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="模型雷達">
+<title>模型雷達</title>
+<style>
+  :root {
+    --bg: #16181b; --panel: #1f2226; --line: #2e3238; --text: #e8e6e1; --dim: #9a9ea5;
+    --accent: #e8a33d; --danger: #e5534b; --ok: #57ab5a; --chip: #2a2e34;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; }
+  body { padding-bottom: env(safe-area-inset-bottom); }
+
+  header { position: sticky; top: 0; z-index: 10; background: rgba(22,24,27,.94);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px; }
+  .top { display: flex; align-items: baseline; gap: 10px; }
+  h1 { margin: 0; font-size: 20px; letter-spacing: .08em; font-weight: 800; }
+  h1 span { color: var(--accent); }
+  #status { font-size: 12px; color: var(--dim); margin-left: auto; text-align: right; cursor: pointer; }
+  #status.bad { color: var(--danger); font-weight: 700; }
+  #statusDetail { display: none; font-size: 12px; color: var(--dim); margin-top: 6px; white-space: pre-wrap; }
+  #statusDetail.open { display: block; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .tabs { display: flex; background: var(--panel); border-radius: 8px; padding: 2px; }
+  .tabs button { background: none; border: 0; color: var(--dim); padding: 6px 12px; border-radius: 6px;
+    font-size: 14px; cursor: pointer; }
+  .tabs button.on { background: var(--accent); color: #1a1a1a; font-weight: 700; }
+  input[type=search], select { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 10px; font-size: 16px; }
+  input[type=search] { flex: 1 1 180px; min-width: 0; }
+  label.chk { font-size: 13px; color: var(--dim); display: flex; align-items: center; gap: 4px; }
+
+  main { padding: 14px 16px 40px; }
+  #count { font-size: 12px; color: var(--dim); margin: 0 0 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  @media (min-width: 700px) { .grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; } }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+    display: flex; flex-direction: column; text-decoration: none; color: inherit; transition: border-color .15s; }
+  .card:hover { border-color: var(--accent); }
+  .img { position: relative; aspect-ratio: 1 / 1; background: #fff; }
+  .img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .badges { position: absolute; top: 6px; left: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .b { font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: #000c; color: #fff; }
+  .b.re { background: #3b6ea8; } .b.out { background: #555; } .b.soon { background: var(--danger); }
+  .b.dl { background: #000c; }
+  .body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  .name { font-size: 13px; line-height: 1.35; font-weight: 600;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .meta { font-size: 11px; color: var(--dim); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; margin-top: auto; padding-top: 4px; }
+  .price { font-weight: 800; color: var(--accent); font-size: 15px; }
+  .price s { color: var(--dim); font-weight: 400; font-size: 11px; margin-left: 4px; }
+  .rel { font-size: 11px; color: var(--dim); }
+  .b.soon, .b.dl { letter-spacing: .02em; }
+
+  .empty { text-align: center; color: var(--dim); padding: 60px 16px; line-height: 1.8; }
+  .empty code { background: var(--panel); padding: 2px 6px; border-radius: 4px; }
+  #sentinel { height: 1px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>模型<span>雷達</span></h1>
+    <div id="status">載入中…</div>
+  </div>
+  <div id="statusDetail"></div>
+  <div class="controls">
+    <div class="tabs" id="tabs">
+      <button data-tab="all" class="on">全部</button>
+      <button data-tab="reserve">預約中</button>
+      <button data-tab="new">新品</button>
+    </div>
+    <input type="search" id="q" placeholder="搜尋名稱、廠商、作品…" autocomplete="off">
+    <select id="sort">
+      <option value="deadline">決定期限近→遠</option>
+      <option value="release">發售日近→遠</option>
+      <option value="newest">最新上架</option>
+      <option value="price_asc">價格低→高</option>
+      <option value="price_desc">價格高→低</option>
+    </select>
+    <label class="chk"><input type="checkbox" id="hideOut">隱藏售完</label>
+  </div>
+</header>
+
+<main>
+  <p id="count"></p>
+  <div class="grid" id="grid"></div>
+  <div id="sentinel"></div>
+</main>
+
+<script>
+// ===== 設定：填入你的 Supabase 專案資訊（anon key 可公開，資料表已設為唯讀） =====
+const SUPABASE_URL = "";        // 例：https://xxxx.supabase.co
+const SUPABASE_ANON_KEY = "";   // Project Settings → API → anon public
+// ================================================================================
+
+const PAGE = 48;
+const CAT_LABEL = { gundam: "ガンプラ他", mecha: "ロボット・特撮", figure: "フィギュア" };
+const state = { all: [], view: [], shown: 0, tab: "all", q: "", sort: "deadline", hideOut: false };
+const $ = (id) => document.getElementById(id);
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const yen = (n) => (n == null ? "" : "¥" + n.toLocaleString("ja-JP"));
+const daysUntil = (iso) => {
+  if (!iso) return null;
+  const t = new Date(iso + "T00:00:00+09:00").getTime();
+  return Math.ceil((t - Date.now()) / 86400000);
+};
+
+async function api(path) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                 Range: `${from}-${from + 999}` },
+    });
+    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+    const rows = await r.json();
+    out.push(...rows);
+    if (rows.length < 1000) return out;
+  }
+}
+
+function renderStatus(run) {
+  const el = $("status"), det = $("statusDetail");
+  if (!run) { el.textContent = "尚無更新紀錄"; el.classList.add("bad"); return; }
+  const t = new Date(run.finished_at || run.started_at);
+  const hours = (Date.now() - t.getTime()) / 3600000;
+  const when = t.toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const bad = !run.ok || !run.finished_at || hours > 36;
+  el.textContent = `${bad ? "⚠ " : ""}更新 ${when}`;
+  el.classList.toggle("bad", bad);
+  const cats = run.per_category || {};
+  const lines = Object.entries(cats).map(([k, v]) => {
+    const [c, l] = k.split(":");
+    return `${v === 0 ? "⚠ " : ""}${CAT_LABEL[c] || c}・${l === "reserve" ? "預約" : "新品"}：${v}`;
+  });
+  lines.push(`本次新增 ${run.items_new}、更新 ${run.items_updated}、錯誤 ${run.errors}`);
+  if (hours > 36) lines.push("超過 36 小時沒有成功更新，請看 GitHub Actions。");
+  if (run.message) lines.push("—\n" + run.message);
+  det.textContent = lines.join("\n");
+}
+
+function applyFilters() {
+  const q = state.q.trim().toLowerCase();
+  let v = state.all.filter((k) => {
+    if (state.tab !== "all" && k.listing !== state.tab) return false;
+    if (state.hideOut && k.sold_out) return false;
+    if (q) {
+      const hay = [k.name, k.maker, k.series, k.original_work, k.jan].join(" ").toLowerCase();
+      if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
+    }
+    return true;
+  });
+  const far = "9999-12-31";
+  const cmp = {
+    deadline: (a, b) => (a.cancel_deadline || far).localeCompare(b.cancel_deadline || far)
+                       || (a.release_date || far).localeCompare(b.release_date || far),
+    release: (a, b) => (a.release_date || far).localeCompare(b.release_date || far),
+    newest: (a, b) => (b.first_seen || "").localeCompare(a.first_seen || ""),
+    price_asc: (a, b) => (a.price_jpy ?? 1e9) - (b.price_jpy ?? 1e9),
+    price_desc: (a, b) => (b.price_jpy ?? -1) - (a.price_jpy ?? -1),
+  }[state.sort];
+  // 決定期限已過的排到後面
+  if (state.sort === "deadline") {
+    v.sort((a, b) => {
+      const pa = daysUntil(a.cancel_deadline), pb = daysUntil(b.cancel_deadline);
+      const ea = pa != null && pa < 0, eb = pb != null && pb < 0;
+      return ea - eb || cmp(a, b);
+    });
+  } else v.sort(cmp);
+  state.view = v;
+  state.shown = 0;
+  $("grid").innerHTML = "";
+  $("count").textContent = `${v.length} 款`;
+  renderMore();
+}
+
+function card(k) {
+  const d = daysUntil(k.cancel_deadline);
+  const badges = [];
+  if (k.is_rerelease) badges.push('<span class="b re">再販</span>');
+  if (k.sold_out) badges.push('<span class="b out">售完</span>');
+  if (d != null && d >= 0) badges.push(`<span class="b ${d <= 7 ? "soon" : "dl"}">${d === 0 ? "今天截止" : "剩 " + d + " 天"}</span>`);
+  const meta = [k.maker, k.original_work].filter(Boolean).join("・");
+  const strike = k.list_price_jpy && k.price_jpy && k.list_price_jpy > k.price_jpy ? `<s>${yen(k.list_price_jpy)}</s>` : "";
+  return `<a class="card" href="${esc(k.product_url)}" target="_blank" rel="noopener">
+    <div class="img">${k.image_url ? `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(k.image_url)}" alt="">` : ""}
+      <div class="badges">${badges.join("")}</div></div>
+    <div class="body">
+      <div class="name">${esc(k.name)}</div>
+      <div class="meta">${esc(meta || CAT_LABEL[k.category] || "")}</div>
+      <div class="rel">發售 ${esc(k.release_text || "TBA")}</div>
+      <div class="row"><span class="price">${yen(k.price_jpy)}${strike}</span></div>
+    </div></a>`;
+}
+
+function renderMore() {
+  const next = state.view.slice(state.shown, state.shown + PAGE);
+  $("grid").insertAdjacentHTML("beforeend", next.map(card).join(""));
+  state.shown += next.length;
+}
+
+function showEmpty(html) { $("grid").innerHTML = `<div class="empty" style="grid-column:1/-1">${html}</div>`; }
+
+async function init() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    $("status").textContent = "未設定";
+    showEmpty("請打開 <code>index.html</code>，在最下方 script 開頭填入<br><code>SUPABASE_URL</code> 與 <code>SUPABASE_ANON_KEY</code>。");
+    return;
+  }
+  try {
+    const [kits, runs] = await Promise.all([
+      api("kits?select=*&order=first_seen.desc"),
+      api("scrape_runs?select=*&order=started_at.desc&limit=1"),
+    ]);
+    state.all = kits;
+    renderStatus(runs[0]);
+    if (!kits.length) { showEmpty("資料庫還沒有資料。<br>到 GitHub → Actions → 手動執行一次每日更新。"); return; }
+    applyFilters();
+  } catch (e) {
+    $("status").textContent = "⚠ 讀取失敗"; $("status").classList.add("bad");
+    showEmpty("讀取 Supabase 失敗：<br>" + esc(e.message));
+  }
+}
+
+$("tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("on", x === b));
+  state.tab = b.dataset.tab; applyFilters();
+});
+let qTimer;
+$("q").addEventListener("input", (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.q = e.target.value; applyFilters(); }, 200); });
+$("sort").addEventListener("change", (e) => { state.sort = e.target.value; applyFilters(); });
+$("hideOut").addEventListener("change", (e) => { state.hideOut = e.target.checked; applyFilters(); });
+$("status").addEventListener("click", () => $("statusDetail").classList.toggle("open"));
+new IntersectionObserver((es) => { if (es[0].isIntersecting && state.shown < state.view.length) renderMore(); },
+  { rootMargin: "800px" }).observe($("sentinel"));
+
+init();
+</script>
+</body>
+</html>
