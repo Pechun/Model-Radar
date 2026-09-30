@@ -1,0 +1,39 @@
+name: 模型雷達 每日更新
+
+on:
+  schedule:
+    - cron: "47 21 * * *"   # 台灣時間每天 05:47
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安裝套件
+        run: pip install -r scraper/requirements.txt
+
+      - name: 解析器自我測試
+        run: python tests/test_parse.py
+
+      - name: 爬 1999.co.jp 並寫入 Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DEBUG_DIR: debug
+        run: python scraper/scrape_1999.py
+
+      - name: 失敗時上傳網頁樣本（供除錯）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-html
+          path: debug/
+          if-no-files-found: ignore
+          retention-days: 14
