@@ -42,14 +42,27 @@ JST = timezone(timedelta(hours=9))
 session = requests.Session()
 session.headers.update({
     "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                   "(KHTML, like Gecko) Chrome/128.0 Safari/537.36 KitRadar/0.1 (personal use)"),
-    "Accept-Language": "ja,en;q=0.8",
+                   "(KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "ja,zh-TW;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
 })
+_blocked_dumped = False
 
 
 # ---------------------------------------------------------------- HTTP
 
+class Blocked(RuntimeError):
+    """網站直接拒絕（403/429）— 重試也沒用，整批停止。"""
+
+
 def fetch(url: str) -> str:
+    global _blocked_dumped
     last_err = None
     for attempt in range(3):
         try:
@@ -59,6 +72,15 @@ def fetch(url: str) -> str:
                 time.sleep(DELAY_SEC)
                 return r.text
             last_err = f"HTTP {r.status_code}"
+            if r.status_code in (403, 429):
+                if not _blocked_dumped:
+                    _blocked_dumped = True
+                    info = f"URL: {url}\nStatus: {r.status_code}\nHeaders:\n" + \
+                        "\n".join(f"  {k}: {v}" for k, v in r.headers.items())
+                    print("[blocked]", info.replace("\n", " | ")[:600])
+                    print("[blocked body]", r.text[:300].replace("\n", " "))
+                    dump_debug("blocked_response.txt", info + "\n\n" + r.text)
+                raise Blocked(f"{url}: {last_err}")
         except requests.RequestException as e:
             last_err = str(e)
         time.sleep(DELAY_SEC * (attempt + 2))
@@ -289,14 +311,23 @@ def main() -> int:
     found: dict[str, dict] = {}   # item_id -> {texts, category, listing}
 
     # 1) 列表頁
+    blocked = False
     for cat in CATEGORIES:
+        if blocked:
+            break
         for listing in LISTINGS:
+            if blocked:
+                break
             key = f"{cat}:{listing}"
             count = 0
             for page in range(1, MAX_PAGES + 1):
                 url = f"{BASE}/more/{listing}/{cat}" + (f"?spage={page}" if page > 1 else "")
                 try:
                     html = fetch(url)
+                except Blocked as e:
+                    errors.append(f"list {key} p{page}: 被網站拒絕 {e}")
+                    blocked = True
+                    break
                 except Exception as e:
                     errors.append(f"list {key} p{page}: {e}")
                     break
