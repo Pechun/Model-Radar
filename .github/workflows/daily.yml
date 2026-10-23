@@ -1,8 +1,7 @@
-name: 模型雷達 每日更新
+name: 模型雷達 1999（已停用排程）
 
 on:
-  schedule:
-    - cron: "47 21 * * *"   # 台灣時間每天 05:47
+  # 1999.co.jp 用 Cloudflare 擋 GitHub 伺服器（2026-10 確認），排程已停用，只保留手動執行
   workflow_dispatch:
 
 jobs:

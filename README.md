@@ -1,5 +1,10 @@
 # 模型雷達 Kit Radar — 第 1 期
 
+> **2026-10-23 更新：資料來源改為模型新聞 RSS**
+> 1999.co.jp 用 Cloudflare 擋住 GitHub 伺服器（回傳 403 驗證頁），原本的 1999 每日排程已停用（仍可手動執行）。
+> 現在由 `scraper/scrape_rss.py` 每 3 小時讀 Hobby Watch 的 RSS，只收組裝模型新品新聞，寫進同一個 `kits` 表（`source = hobbywatch`）。
+> 篩選關鍵字在 `scrape_rss.py` 的 `KIT_WORDS`／`SKIP_WORDS`／`STYLE_SKIP`；排程在 `.github/workflows/rss.yml`。
+
 每天自動抓 1999.co.jp（ホビーサーチ）的組裝模型新品與預約品，存進 Supabase，用手機網頁瀏覽。
 
 ```

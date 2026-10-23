@@ -1,0 +1,29 @@
+name: 模型雷達 新聞更新
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"   # 每 3 小時一次（RSS 只保留最新幾十則，要常讀才不會漏）
+  workflow_dispatch:
+
+jobs:
+  rss:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安裝套件
+        run: pip install -r scraper/requirements.txt
+
+      - name: 解析器自我測試
+        run: python tests/test_rss.py
+
+      - name: 讀 RSS 並寫入 Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scraper/scrape_rss.py
