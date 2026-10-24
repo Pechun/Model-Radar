@@ -8,12 +8,20 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r scraper/requirements.txt numpy
-      - name: HLJ dry run
+      - name: HLJ detail debug
         run: |
-          DRY_RUN=1 NO_CLIP=1 MAX_PAGES=1 MAX_DETAIL=3 timeout 900 python scraper/scrape_hlj.py > out.txt 2>&1 || true
-          grep -E "^\[|error" out.txt | head -40 | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/^/::notice title=log::/'
-          echo
-          sed -n '/^\[$/,$p' out.txt | head -c 2500 | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/^/::notice title=json::/'
-          echo
-          curl -s -A "Mozilla/5.0 Chrome/129" "https://www.hlj.com/search/?GenreCode2=Science-Fiction&MacroType2=Injection+Kits&StockLevel=All+Future+Release&Page=2" -o p2.html
-          echo "::notice title=page2::$(grep -o 'productthumbs/[a-z0-9-]*/[a-z0-9-]*_0' p2.html | head -5 | tr '\n' ' ') size=$(wc -c < p2.html)"
+          python - <<'PY'
+          import sys, re, json
+          sys.path.insert(0, "scraper")
+          import scrape_hlj as s
+          html = s.fetch("https://www.hlj.com/plamatea-pre-war-military-t-60-power-armor-fallout-gsc59075")
+          open("d.html","w").write(html)
+          d = s.parse_detail(html)
+          print("::notice title=parsed::" + json.dumps(d, ensure_ascii=False))
+          from bs4 import BeautifulSoup
+          t = BeautifulSoup(html, "html.parser").get_text("\n", strip=True)
+          for lb in ["Item Type", "Release Date", "Manufacturer", "USD", "Cancellation"]:
+              for m in list(re.finditer(re.escape(lb), t))[:3]:
+                  frag = t[max(0, m.start()-60): m.end()+80].replace("\n", " | ")
+                  print(f"::notice title={lb}::" + frag)
+          PY
