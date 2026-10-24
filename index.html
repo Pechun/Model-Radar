@@ -413,6 +413,26 @@ new IntersectionObserver((es) => { if (es[0].isIntersecting && state.shown < sta
   { rootMargin: "800px" }).observe($("sentinel"));
 
 init();
+
+// ---- 自動更新：回到 App 時檢查網頁有沒有新版本，有就自動重新載入 ----
+async function pageHash() {
+  const r = await fetch(location.pathname + "?v=" + Date.now(), { cache: "no-store" });
+  const t = await r.text();
+  let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0;
+  return h;
+}
+let baseHash = null;
+pageHash().then((h) => { baseHash = h; }).catch(() => {});
+let lastCheck = Date.now();
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState !== "visible") return;
+  try {
+    const h = await pageHash();
+    if (baseHash !== null && h !== baseHash) { location.reload(); return; }
+  } catch {}
+  // 離開超過 30 分鐘 → 重新讀商品資料
+  if (Date.now() - lastCheck > 30 * 60 * 1000) { lastCheck = Date.now(); init(); }
+});
 </script>
 </body>
 </html>
