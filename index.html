@@ -47,7 +47,7 @@
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
     display: flex; flex-direction: column; text-decoration: none; color: inherit; transition: border-color .15s; }
   .card:hover { border-color: var(--accent); }
-  .card.liked:hover { border-color: var(--ok); }
+  
   .img { position: relative; aspect-ratio: 1 / 1; background: #fff; }
   .img img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .badges { position: absolute; top: 6px; left: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
@@ -67,15 +67,15 @@
   .rel { font-size: 11px; color: var(--dim); }
   .b.soon, .b.dl { letter-spacing: .02em; }
 
-  .card.liked { border-color: var(--ok); }
+  .card.liked { border-color: var(--accent); }
   .card.disliked { opacity: .4; }
   .card a { color: inherit; text-decoration: none; }
   .card a.img { display: block; }
   .acts { display: flex; border-top: 1px solid var(--line); }
-  .acts button { flex: 1; background: none; border: 0; padding: 8px 0; font-size: 17px; cursor: pointer; opacity: .45; }
+  .acts button { flex: 1; background: none; border: 0; padding: 8px 0; font-size: 13px; color: var(--text); cursor: pointer; opacity: .45; }
   .acts button:hover { opacity: 1; background: var(--chip); }
   .acts button.on { opacity: 1; }
-  .acts button.up.on { background: rgba(87,171,90,.18); }
+  .acts button.up.on { background: rgba(232,163,61,.18); color: var(--accent); font-weight: 700; }
   .acts button.down.on { background: rgba(229,83,75,.18); }
   #learn { font-size: 12px; color: var(--dim); margin-top: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   #learn .bar { flex: 0 1 140px; height: 5px; background: var(--chip); border-radius: 9px; overflow: hidden; }
@@ -111,13 +111,12 @@
       <option value="price_desc">價格高→低</option>
     </select>
     <select id="minScore">
-      <option value="0">全部</option>
-      <option value="50" selected>契合 ≥ 50</option>
+      <option value="0" selected>全部</option>
+      <option value="50">契合 ≥ 50</option>
       <option value="70">契合 ≥ 70</option>
       <option value="85">契合 ≥ 85</option>
     </select>
     <label class="chk"><input type="checkbox" id="hideOut">隱藏售完</label>
-    <label class="chk"><input type="checkbox" id="showDis">顯示已 👎</label>
   </div>
   <div id="learn"></div>
 </header>
@@ -137,7 +136,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const PAGE = 48;
 const CAT_LABEL = { gundam: "ガンプラ他", mecha: "ロボット・特撮", figure: "フィギュア", news: "模型新聞", hobbywatch: "Hobby Watch",
   "Gundam": "鋼彈", "Science-Fiction": "科幻", "Figures": "角色" };
-const state = { all: [], view: [], shown: 0, tab: "all", q: "", sort: "style", hideOut: false, minScore: 50,
+const state = { all: [], view: [], shown: 0, tab: "all", q: "", sort: "style", hideOut: false, minScore: 0,
                 fb: {}, showDis: false, dirty: false, remote: false };
 const LS_KEY = "kitradar_feedback_v1";
 const $ = (id) => document.getElementById(id);
@@ -147,7 +146,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
 const yen = (n) => (n == null ? "" : "¥" + n.toLocaleString("ja-JP"));
 const usd = (n) => (n == null ? "" : "US$" + Number(n).toFixed(2));
 const priceKey = (k) => (k.source !== "hlj" ? k.price_jpy : null) ?? (k.price_usd != null ? k.price_usd * 150 : null);
-// ---- 👍👎 學習：CLIP 向量相似度 ----
+// ---- 收藏（保留 CLIP 相似度程式，目前權重 w = 0，不影響排序） ----
 function decodeEmb(b64) {
   const bin = atob(b64), v = new Float32Array(bin.length);
   let n = 0;
@@ -168,10 +167,10 @@ function computeScores(kits) {
   for (const f of Object.values(state.fb)) {
     if (!f.emb) continue;
     f._v ||= decodeEmb(f.emb);
-    (f.vote > 0 ? likes : dis).push(f._v);
+    if (f.vote > 0) likes.push(f._v);
   }
   const n = likes.length + dis.length;
-  const w = Math.min(1, n / 10) * 1.2, BASE = 0.72;
+  const w = 0, BASE = 0.72;   // 收藏不影響排序（只依外型描述打分，不會越篩越窄）
   for (const k of kits) {
     if (k.style_score == null) { k.raw = null; continue; }
     let fb = 0;
@@ -187,13 +186,10 @@ function computeScores(kits) {
   const N = s.length;
   s.forEach((k, i) => { k.pct = N > 1 ? Math.round((i / (N - 1)) * 100) : 50; });
   kits.forEach((k) => { if (k.raw == null) k.pct = null; });
-  renderLearn(likes.length, dis.length);
+  renderLearn(Object.values(state.fb).filter((f) => f.vote > 0).length);
 }
-function renderLearn(lk, dk) {
-  const n = lk + dk, pct = Math.min(100, Math.round(n / 20 * 100));
-  const msg = n < 5 ? "多按幾個 👍👎，排序會越來越準" : n < 20 ? "學習中" : "已熟悉你的口味";
-  $("learn").innerHTML = `<span>👍 ${lk}　👎 ${dk}</span><span class="bar"><i style="width:${pct}%"></i></span>
-    <span>${msg}${state.remote ? "" : "（只存在這台裝置）"}</span>${state.dirty ? '<button id="reorder">↻ 套用新排序</button>' : ""}`;
+function renderLearn(lk) {
+  $("learn").innerHTML = lk ? `<span>★ 已收藏 ${lk} 款${state.remote ? "" : "（只存在這台裝置）"}</span>` : "";
 }
 
 // ---- 回饋儲存：Supabase（跨裝置）＋ localStorage（備援） ----
@@ -225,7 +221,6 @@ function vote(id, v) {
     saveRemote(id, state.fb[id]);
   }
   saveLocal();
-  state.dirty = true;
   computeScores(state.all);
   const el = document.querySelector(`.card[data-id="${CSS.escape(id)}"]`);
   if (el) el.outerHTML = card(k);
@@ -279,7 +274,6 @@ function applyFilters() {
     if (state.tab === "liked") { if (f !== 1) return false; }
     else {
       if (state.tab !== "all" && k.listing !== state.tab) return false;
-      if (!state.showDis && f === -1) return false;
     }
     if (state.hideOut && k.sold_out) return false;
     if (state.tab !== "liked" && state.minScore > 0 && k.pct != null && k.pct < state.minScore) return false;
@@ -335,8 +329,7 @@ function card(k) {
       <div class="row"><span class="price">${k.source !== "hlj" && k.price_jpy ? yen(k.price_jpy) + strike : usd(k.price_usd)}</span></div>
     </div>
     <div class="acts">
-      <button class="up ${f > 0 ? "on" : ""}" data-v="1" aria-label="喜歡">👍</button>
-      <button class="down ${f < 0 ? "on" : ""}" data-v="-1" aria-label="不喜歡">👎</button>
+      <button class="up ${f > 0 ? "on" : ""}" data-v="1" aria-label="收藏">${f > 0 ? "★ 已收藏" : "☆ 收藏"}</button>
     </div></div>`;
 }
 
@@ -389,7 +382,6 @@ let qTimer;
 $("q").addEventListener("input", (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.q = e.target.value; applyFilters(); }, 200); });
 $("sort").addEventListener("change", (e) => { state.sort = e.target.value; applyFilters(); });
 $("minScore").addEventListener("change", (e) => { state.minScore = +e.target.value; applyFilters(); });
-$("showDis").addEventListener("change", (e) => { state.showDis = e.target.checked; applyFilters(); });
 $("grid").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-v]"); if (!b) return;
   vote(b.closest(".card").dataset.id, +b.dataset.v);
