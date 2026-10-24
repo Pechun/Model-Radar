@@ -8,20 +8,9 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r scraper/requirements.txt numpy
-      - name: HLJ detail debug
+      - name: HLJ dry run
         run: |
-          python - <<'PY'
-          import sys, re, json
-          sys.path.insert(0, "scraper")
-          import scrape_hlj as s
-          html = s.fetch("https://www.hlj.com/plamatea-pre-war-military-t-60-power-armor-fallout-gsc59075")
-          open("d.html","w").write(html)
-          d = s.parse_detail(html)
-          print("::notice title=parsed::" + json.dumps(d, ensure_ascii=False))
-          from bs4 import BeautifulSoup
-          t = BeautifulSoup(html, "html.parser").get_text("\n", strip=True)
-          for lb in ["Item Type", "Release Date", "Manufacturer", "USD", "Cancellation"]:
-              for m in list(re.finditer(re.escape(lb), t))[:3]:
-                  frag = t[max(0, m.start()-60): m.end()+80].replace("\n", " | ")
-                  print(f"::notice title={lb}::" + frag)
-          PY
+          DRY_RUN=1 NO_CLIP=1 MAX_PAGES=1 MAX_DETAIL=4 timeout 900 python scraper/scrape_hlj.py > out.txt 2>&1 || echo "exit $?" >> out.txt
+          tail -30 out.txt | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/^/::notice title=tail::/'
+          echo
+          grep -E "^\[(detail|error)" out.txt | head -20 | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/^/::notice title=detail::/'

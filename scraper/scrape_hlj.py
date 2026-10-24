@@ -138,8 +138,14 @@ MONTHS = {m: i for i, m in enumerate(["january", "february", "march", "april", "
 def parse_detail(html: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True)
-    h1 = soup.find("h1")
-    name = h1.get_text(" ", strip=True) if h1 else None
+    name = None
+    og = soup.find("meta", property="og:title")
+    if og and og.get("content"):
+        name = og["content"]
+    elif soup.title and soup.title.string:
+        name = soup.title.string
+    if name:
+        name = re.sub(r"\s*\|\s*HLJ\.com\s*$", "", name).strip()
     rel = _date(_field(text, "Release Date"))
     rel_text = None
     m = re.search(r"expected to release in ([A-Za-z]+) (\d{4})", text)
@@ -294,7 +300,10 @@ def main() -> int:
             time.sleep(DELAY)
             try:
                 d = parse_detail(fetch(it["url"]))
-                if not is_kit(d.pop("item_type")):
+                itype = d.pop("item_type")
+                if dry:
+                    print(f"[detail] {code} type={itype} rel={d['release_date']} name={d['name']}")
+                if not is_kit(itype):
                     continue
                 if not d["name"]:
                     d["name"] = row.get("name") or it["name"] or code
