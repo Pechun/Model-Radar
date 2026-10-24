@@ -4,24 +4,16 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: probe
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r scraper/requirements.txt numpy
+      - name: HLJ dry run
         run: |
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36"
-          out=""
-          for u in \
-            "https://plazajapan.com/products.json?limit=5" \
-            "https://www.gundamplanet.com/products.json?limit=5" \
-            "https://www.newtype.us/products.json?limit=5" \
-            "https://www.usagundamstore.com/products.json?limit=5" \
-            "https://www.1999.co.jp/eng/" \
-            "https://www.hlj.com/search/?Word=plastic+model&GenreCode=Model+Kits&Page=1" \
-            "https://www.hlj.com/productsearch/?Page=1&MacroType=Model+Kits&ComingSoon=1" \
-            "https://www.hlj.com/robots.txt" \
-            "https://www.nin-nin-game.com/robots.txt" \
-            "https://hobby.watch.impress.co.jp/data/rss/1.0/hbw/feed.rdf" ; do
-            r=$(curl -s -o /tmp/b -w "%{http_code} %{size_download}" -A "$UA" -L --max-time 25 "$u" || echo "ERR 0")
-            cf=$(grep -c "Just a moment" /tmp/b 2>/dev/null || true)
-            out="$out$r cf=$cf $u%0A"
-          done
-          echo "::notice title=probe2::$out"
-          curl -s -A "$UA" https://www.hlj.com/robots.txt | head -40 | tr '\n' '|' | sed 's/^/::notice title=hljrobots::/'; echo
+          DRY_RUN=1 NO_CLIP=1 MAX_PAGES=1 MAX_DETAIL=3 timeout 900 python scraper/scrape_hlj.py > out.txt 2>&1 || true
+          grep -E "^\[|error" out.txt | head -40 | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/^/::notice title=log::/'
+          echo
+          sed -n '/^\[$/,$p' out.txt | head -c 2500 | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/^/::notice title=json::/'
+          echo
+          curl -s -A "Mozilla/5.0 Chrome/129" "https://www.hlj.com/search/?GenreCode2=Science-Fiction&MacroType2=Injection+Kits&StockLevel=All+Future+Release&Page=2" -o p2.html
+          echo "::notice title=page2::$(grep -o 'productthumbs/[a-z0-9-]*/[a-z0-9-]*_0' p2.html | head -5 | tr '\n' ' ') size=$(wc -c < p2.html)"

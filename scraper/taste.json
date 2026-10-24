@@ -1,0 +1,26 @@
+{
+  "_說明": "外型偏好（英文描述給 CLIP 看）。positive = 喜歡的外型，negative = 不想看到的。改完 push，下次更新會套用到新商品；要全部重算就手動執行 workflow 並勾選 rescore。",
+  "positive": [
+    "a bulky heavily armored giant robot plastic model kit",
+    "a massive Pacific Rim style jaeger robot with thick armor plates",
+    "a giant kaiju monster model with a heavy muscular body",
+    "a fierce armored monster creature like a digimon or pokemon",
+    "a powerful dragon monster figure with spikes and armor",
+    "an armored samurai mecha warrior in heavy bulky armor",
+    "a rugged sci-fi battle mech with heavy weapons and thick limbs",
+    "a heavy armored beast mecha with claws and fangs"
+  ],
+  "negative": [
+    "an anime girl figure",
+    "a cute girl plastic model with a mecha musume outfit",
+    "a slim slender elegant robot with thin limbs",
+    "a small cute chibi deformed figure",
+    "a realistic car model kit",
+    "a realistic military airplane or tank model kit",
+    "a train or ship model",
+    "hobby tools, paint bottles or decals",
+    "a set of spare hands, weapons and accessory parts",
+    "a building or diorama base",
+    "a human bust sculpture"
+  ]
+}
