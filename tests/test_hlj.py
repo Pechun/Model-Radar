@@ -14,14 +14,14 @@ SEARCH = """<html><body><p>Showing 142 results</p><aside><a href="/x-mhy1"><img 
 
 DETAIL = """<html><head><title>PLAMATEA Pre-war Military T-60 Power Armor (Fallout) | HLJ.com</title></head><body><h1>After click Buy Now</h1><h1>PLAMATEA Pre-war Military T-60 Power Armor (Fallout)</h1>
 <div class="price">$67.90 USD</div>
-<p>This item is expected to release in June 2027. Preorder yours now!</p>
+<p>Aoshima, is joining Aoshima Series line-up</p><p>This item is expected to release in June 2027. Preorder yours now!</p>
 <ul><li>Code: GSC59075</li><li>JAN Code: 4570232590755</li><li>Release Date: 2027/06/30</li>
 <li>Category: Science-Fiction</li><li>Cancellation Deadline: 2026-11-26</li><li>Series: Fallout</li>
 <li>Item Type: Injection Kits</li><li>Manufacturer: Good Smile Company</li></ul>
 <div class="related">$12.00 USD</div></body></html>"""
 
-DETAIL2 = """<html><head><title>HG 1/144 Gundam X | HLJ.com</title></head><body><dl><dt>Release Date</dt><dd>2026/12/31</dd>
-<dt>Item Type</dt><dd>High Grade Kits</dd><dt>Manufacturer</dt><dd>Bandai</dd></dl>
+DETAIL2 = """<html><head><title>HG 1/144 Gundam X | HLJ.com</title></head><body><dl><dt>Release Date:</dt><dd>2026/12/31</dd>
+<dt>Item Type:</dt><dd>High Grade Kits</dd><dt>Manufacturer:</dt><dd>Bandai</dd></dl>
 <span>$25.50</span></body></html>"""
 
 
@@ -44,7 +44,7 @@ def test_detail():
     assert d["price_usd"] == 67.90 and d["release_date"] == "2027-06-30"
     assert d["release_text"] == "2027年6月" and d["cancel_deadline"] == "2026-11-26"
     assert d["maker"] == "Good Smile Company" and d["jan"] == "4570232590755"
-    assert s.is_kit(d["item_type"])
+    assert s.is_kit(d["item_type"]) and d["series"] == "Fallout" and d["price_jpy"] is None
 
 
 def test_detail_dl():

@@ -10,6 +10,10 @@ on:
         description: "全部重算外型分數（改過 taste.json 後勾選）"
         type: boolean
         default: false
+      force_detail:
+        description: "全部重新讀商品頁（修正欄位用）"
+        type: boolean
+        default: false
   push:
     paths: ["scraper/taste.json"]
 
@@ -45,4 +49,5 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           RESCORE: ${{ (github.event_name == 'push' || inputs.rescore) && '1' || '0' }}
+          FORCE_DETAIL: ${{ inputs.force_detail && '1' || '0' }}
         run: python scraper/scrape_hlj.py

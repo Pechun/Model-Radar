@@ -118,10 +118,12 @@ def result_count(html: str) -> int | None:
 
 
 def _field(text: str, *labels: str) -> str | None:
+    """找「標籤:」後面的值（同一行或下一行），值太長就當成誤抓"""
     for lb in labels:
-        m = re.search(rf"{re.escape(lb)}\s*:?\s*\n?\s*([^\n]+)", text, re.I)
-        if m and m.group(1).strip() not in (":", ""):
-            return m.group(1).strip().lstrip(":").strip()
+        for m in re.finditer(rf"(?:^|\n){re.escape(lb)}\s*:\s*\n?\s*([^\n]+)", text, re.I):
+            v = m.group(1).strip()
+            if v and len(v) <= 80:
+                return v
     return None
 
 
@@ -166,10 +168,6 @@ def parse_detail(html: str) -> dict:
     pm = re.search(r"\$\s?([\d,]+\.\d{2})\s*USD", text) or re.search(r"\$\s?([\d,]+\.\d{2})", text)
     if pm:
         price = float(pm.group(1).replace(",", ""))
-    yen = None
-    ym = re.search(r"([\d,]{3,})\s*(?:JPY|yen)", text, re.I) or re.search(r"¥\s?([\d,]{3,})", text)
-    if ym:
-        yen = int(ym.group(1).replace(",", ""))
     item_type = _field(text, "Item Type")
     return {
         "name": name,
@@ -180,7 +178,7 @@ def parse_detail(html: str) -> dict:
         "release_text": rel_text,
         "cancel_deadline": _date(_field(text, "Cancellation Deadline")),
         "price_usd": price,
-        "price_jpy": yen,
+        "price_jpy": None,  # HLJ 只用美元價；明確清空舊的誤抓值
         "item_type": item_type,
         "sold_out": bool(re.search(r"\b(Sold Out|Discontinued)\b", text)),
     }
@@ -241,6 +239,7 @@ def main() -> int:
     dry = os.environ.get("DRY_RUN") == "1"
     use_clip = os.environ.get("NO_CLIP") != "1"
     rescore = os.environ.get("RESCORE") == "1"
+    force = os.environ.get("FORCE_DETAIL") == "1"
     max_detail = int(os.environ.get("MAX_DETAIL", "700"))
     max_pages = int(os.environ.get("MAX_PAGES", str(MAX_PAGES)))
     now = datetime.now(timezone.utc)
@@ -297,7 +296,7 @@ def main() -> int:
     for code, it in found.items():
         kid = f"hlj:{code}"
         prev = existing.get(kid)
-        need = prev is None or not prev.get("detail_fetched_at") or \
+        need = force or prev is None or not prev.get("detail_fetched_at") or \
             datetime.fromisoformat(prev["detail_fetched_at"].replace("Z", "+00:00")) < stale
         row = {"id": kid, "source": "hlj", "source_item_id": code, "category": it["genre"],
                "product_url": it["url"], "last_seen": now_iso, "updated_at": now_iso}
@@ -319,7 +318,7 @@ def main() -> int:
                 d["is_rerelease"] = "reissue" in (d["name"] or "").lower()
                 d["listing"] = "reserve" if (d["release_date"] and d["release_date"] > today.isoformat()) \
                     or it["mode"] == "reserve" else "new"
-                row.update({k: v for k, v in d.items() if v is not None})
+                row.update({k: v for k, v in d.items() if v is not None or k == "price_jpy"})
                 row["detail_fetched_at"] = now_iso
             except Exception as e:
                 errors.append(f"detail {code}: {e}")

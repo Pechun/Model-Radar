@@ -125,7 +125,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const yen = (n) => (n == null ? "" : "¥" + n.toLocaleString("ja-JP"));
 const usd = (n) => (n == null ? "" : "US$" + Number(n).toFixed(2));
-const priceKey = (k) => k.price_jpy ?? (k.price_usd != null ? k.price_usd * 150 : null);
+const priceKey = (k) => (k.source !== "hlj" ? k.price_jpy : null) ?? (k.price_usd != null ? k.price_usd * 150 : null);
 // style_score → 0–100 百分位（在目前所有商品中的排名）
 function computeScores(kits) {
   const s = kits.filter((k) => k.style_score != null).sort((a, b) => a.style_score - b.style_score);
@@ -226,7 +226,7 @@ function card(k) {
       <div class="name">${esc(k.name)}</div>
       <div class="meta">${esc(meta || CAT_LABEL[k.category] || "")}</div>
       <div class="rel">發售 ${esc(k.release_text || "TBA")}</div>
-      <div class="row"><span class="price">${k.price_jpy ? yen(k.price_jpy) + strike : usd(k.price_usd)}</span></div>
+      <div class="row"><span class="price">${k.source !== "hlj" && k.price_jpy ? yen(k.price_jpy) + strike : usd(k.price_usd)}</span></div>
     </div></a>`;
 }
 
