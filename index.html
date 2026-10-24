@@ -47,6 +47,7 @@
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
     display: flex; flex-direction: column; text-decoration: none; color: inherit; transition: border-color .15s; }
   .card:hover { border-color: var(--accent); }
+  .card.liked:hover { border-color: var(--ok); }
   .img { position: relative; aspect-ratio: 1 / 1; background: #fff; }
   .img img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .badges { position: absolute; top: 6px; left: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
@@ -66,6 +67,21 @@
   .rel { font-size: 11px; color: var(--dim); }
   .b.soon, .b.dl { letter-spacing: .02em; }
 
+  .card.liked { border-color: var(--ok); }
+  .card.disliked { opacity: .4; }
+  .card a { color: inherit; text-decoration: none; }
+  .card a.img { display: block; }
+  .acts { display: flex; border-top: 1px solid var(--line); }
+  .acts button { flex: 1; background: none; border: 0; padding: 8px 0; font-size: 17px; cursor: pointer; opacity: .45; }
+  .acts button:hover { opacity: 1; background: var(--chip); }
+  .acts button.on { opacity: 1; }
+  .acts button.up.on { background: rgba(87,171,90,.18); }
+  .acts button.down.on { background: rgba(229,83,75,.18); }
+  #learn { font-size: 12px; color: var(--dim); margin-top: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  #learn .bar { flex: 0 1 140px; height: 5px; background: var(--chip); border-radius: 9px; overflow: hidden; }
+  #learn .bar i { display: block; height: 100%; background: var(--accent); }
+  #learn button { background: var(--accent); color: #1a1a1a; border: 0; border-radius: 6px; padding: 3px 9px;
+    font-size: 12px; font-weight: 700; cursor: pointer; }
   .empty { text-align: center; color: var(--dim); padding: 60px 16px; line-height: 1.8; }
   .empty code { background: var(--panel); padding: 2px 6px; border-radius: 4px; }
   #sentinel { height: 1px; }
@@ -83,6 +99,7 @@
       <button data-tab="all" class="on">全部</button>
       <button data-tab="reserve">預約中</button>
       <button data-tab="new">新品</button>
+      <button data-tab="liked">收藏</button>
     </div>
     <input type="search" id="q" placeholder="搜尋名稱、廠商、作品…" autocomplete="off">
     <select id="sort">
@@ -100,7 +117,9 @@
       <option value="85">契合 ≥ 85</option>
     </select>
     <label class="chk"><input type="checkbox" id="hideOut">隱藏售完</label>
+    <label class="chk"><input type="checkbox" id="showDis">顯示已 👎</label>
   </div>
+  <div id="learn"></div>
 </header>
 
 <main>
@@ -118,7 +137,9 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const PAGE = 48;
 const CAT_LABEL = { gundam: "ガンプラ他", mecha: "ロボット・特撮", figure: "フィギュア", news: "模型新聞", hobbywatch: "Hobby Watch",
   "Gundam": "鋼彈", "Science-Fiction": "科幻", "Figures": "角色" };
-const state = { all: [], view: [], shown: 0, tab: "all", q: "", sort: "style", hideOut: false, minScore: 50 };
+const state = { all: [], view: [], shown: 0, tab: "all", q: "", sort: "style", hideOut: false, minScore: 50,
+                fb: {}, showDis: false, dirty: false, remote: false };
+const LS_KEY = "kitradar_feedback_v1";
 const $ = (id) => document.getElementById(id);
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
@@ -126,12 +147,88 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
 const yen = (n) => (n == null ? "" : "¥" + n.toLocaleString("ja-JP"));
 const usd = (n) => (n == null ? "" : "US$" + Number(n).toFixed(2));
 const priceKey = (k) => (k.source !== "hlj" ? k.price_jpy : null) ?? (k.price_usd != null ? k.price_usd * 150 : null);
-// style_score → 0–100 百分位（在目前所有商品中的排名）
+// ---- 👍👎 學習：CLIP 向量相似度 ----
+function decodeEmb(b64) {
+  const bin = atob(b64), v = new Float32Array(bin.length);
+  let n = 0;
+  for (let i = 0; i < bin.length; i++) { let x = bin.charCodeAt(i); if (x > 127) x -= 256; v[i] = x; n += x * x; }
+  n = Math.sqrt(n) || 1;
+  for (let i = 0; i < v.length; i++) v[i] /= n;
+  return v;
+}
+const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+function topMean(v, set, k = 3) {
+  if (!set.length) return null;
+  const s = set.map((x) => dot(v, x)).sort((a, b) => b - a).slice(0, k);
+  return s.reduce((a, b) => a + b, 0) / s.length;
+}
+// 原始分數 = 文字偏好分數 + 回饋相似度（回饋越多權重越高），再換成 0–100 百分位
 function computeScores(kits) {
-  const s = kits.filter((k) => k.style_score != null).sort((a, b) => a.style_score - b.style_score);
-  const n = s.length;
-  s.forEach((k, i) => { k.pct = n > 1 ? Math.round((i / (n - 1)) * 100) : 50; });
-  kits.forEach((k) => { if (k.style_score == null) k.pct = null; });
+  const likes = [], dis = [];
+  for (const f of Object.values(state.fb)) {
+    if (!f.emb) continue;
+    f._v ||= decodeEmb(f.emb);
+    (f.vote > 0 ? likes : dis).push(f._v);
+  }
+  const n = likes.length + dis.length;
+  const w = Math.min(1, n / 10) * 1.2, BASE = 0.72;
+  for (const k of kits) {
+    if (k.style_score == null) { k.raw = null; continue; }
+    let fb = 0;
+    if (k.style_emb) {
+      k._v ||= decodeEmb(k.style_emb);
+      const l = topMean(k._v, likes), d = topMean(k._v, dis);
+      if (l !== null) fb += (l - BASE) * 100;
+      if (d !== null) fb -= (d - BASE) * 100;
+    }
+    k.raw = k.style_score + w * fb;
+  }
+  const s = kits.filter((k) => k.raw != null).sort((a, b) => a.raw - b.raw);
+  const N = s.length;
+  s.forEach((k, i) => { k.pct = N > 1 ? Math.round((i / (N - 1)) * 100) : 50; });
+  kits.forEach((k) => { if (k.raw == null) k.pct = null; });
+  renderLearn(likes.length, dis.length);
+}
+function renderLearn(lk, dk) {
+  const n = lk + dk, pct = Math.min(100, Math.round(n / 20 * 100));
+  const msg = n < 5 ? "多按幾個 👍👎，排序會越來越準" : n < 20 ? "學習中" : "已熟悉你的口味";
+  $("learn").innerHTML = `<span>👍 ${lk}　👎 ${dk}</span><span class="bar"><i style="width:${pct}%"></i></span>
+    <span>${msg}${state.remote ? "" : "（只存在這台裝置）"}</span>${state.dirty ? '<button id="reorder">↻ 套用新排序</button>' : ""}`;
+}
+
+// ---- 回饋儲存：Supabase（跨裝置）＋ localStorage（備援） ----
+function saveLocal() {
+  const o = {};
+  for (const [k, v] of Object.entries(state.fb)) { const { _v, ...r } = v; o[k] = r; }
+  try { localStorage.setItem(LS_KEY, JSON.stringify(o)); } catch {}
+}
+function loadLocal() { try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch { return {}; } }
+const sbH = () => ({ apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" });
+async function saveRemote(id, row) {
+  if (!state.remote) return;
+  try {
+    if (!row) await fetch(`${SUPABASE_URL}/rest/v1/kit_feedback?kit_id=eq.${encodeURIComponent(id)}`, { method: "DELETE", headers: sbH() });
+    else {
+      const { _v, ...clean } = row;
+      await fetch(`${SUPABASE_URL}/rest/v1/kit_feedback`, { method: "POST",
+        headers: { ...sbH(), Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify({ ...clean, updated_at: new Date().toISOString() }) });
+    }
+  } catch {}
+}
+function vote(id, v) {
+  const k = state.all.find((x) => x.id === id);
+  const cur = state.fb[id]?.vote;
+  if (cur === v) { delete state.fb[id]; saveRemote(id, null); }
+  else {
+    state.fb[id] = { kit_id: id, vote: v, name: k?.name, image_url: k?.image_url, product_url: k?.product_url, emb: k?.style_emb || null };
+    saveRemote(id, state.fb[id]);
+  }
+  saveLocal();
+  state.dirty = true;
+  computeScores(state.all);
+  const el = document.querySelector(`.card[data-id="${CSS.escape(id)}"]`);
+  if (el) el.outerHTML = card(k);
 }
 const daysUntil = (iso) => {
   if (!iso) return null;
@@ -174,11 +271,18 @@ function renderStatus(run) {
 }
 
 function applyFilters() {
+  state.dirty = false;
+  computeScores(state.all);
   const q = state.q.trim().toLowerCase();
   let v = state.all.filter((k) => {
-    if (state.tab !== "all" && k.listing !== state.tab) return false;
+    const f = state.fb[k.id]?.vote;
+    if (state.tab === "liked") { if (f !== 1) return false; }
+    else {
+      if (state.tab !== "all" && k.listing !== state.tab) return false;
+      if (!state.showDis && f === -1) return false;
+    }
     if (state.hideOut && k.sold_out) return false;
-    if (state.minScore > 0 && k.pct != null && k.pct < state.minScore) return false;
+    if (state.tab !== "liked" && state.minScore > 0 && k.pct != null && k.pct < state.minScore) return false;
     if (q) {
       const hay = [k.name, k.maker, k.series, k.original_work, k.jan].join(" ").toLowerCase();
       if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
@@ -219,15 +323,21 @@ function card(k) {
   const meta = [k.maker, k.series || k.original_work].filter(Boolean).join("・");
   const sc = k.pct == null ? "" : `<span class="score ${k.pct >= 85 ? "hi" : k.pct >= 60 ? "mid" : ""}">${k.pct}</span>`;
   const strike = k.list_price_jpy && k.price_jpy && k.list_price_jpy > k.price_jpy ? `<s>${yen(k.list_price_jpy)}</s>` : "";
-  return `<a class="card" href="${esc(k.product_url)}" target="_blank" rel="noopener">
-    <div class="img">${k.image_url ? `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(k.image_url)}" alt="">` : ""}
-      <div class="badges">${badges.join("")}</div>${sc}</div>
+  const f = state.fb[k.id]?.vote;
+  const url = esc(k.product_url);
+  return `<div class="card ${f > 0 ? "liked" : f < 0 ? "disliked" : ""}" data-id="${esc(k.id)}">
+    <a class="img" href="${url}" target="_blank" rel="noopener">${k.image_url ? `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(k.image_url)}" alt="">` : ""}
+      <div class="badges">${badges.join("")}</div>${sc}</a>
     <div class="body">
-      <div class="name">${esc(k.name)}</div>
+      <a class="name" href="${url}" target="_blank" rel="noopener">${esc(k.name)}</a>
       <div class="meta">${esc(meta || CAT_LABEL[k.category] || "")}</div>
       <div class="rel">發售 ${esc(k.release_text || "TBA")}</div>
       <div class="row"><span class="price">${k.source !== "hlj" && k.price_jpy ? yen(k.price_jpy) + strike : usd(k.price_usd)}</span></div>
-    </div></a>`;
+    </div>
+    <div class="acts">
+      <button class="up ${f > 0 ? "on" : ""}" data-v="1" aria-label="喜歡">👍</button>
+      <button class="down ${f < 0 ? "on" : ""}" data-v="-1" aria-label="不喜歡">👎</button>
+    </div></div>`;
 }
 
 function renderMore() {
@@ -250,6 +360,16 @@ async function init() {
       api("scrape_runs?select=*&order=started_at.desc&limit=1"),
     ]);
     state.all = kits;
+    state.fb = loadLocal();
+    try {
+      const rows = await api("kit_feedback?select=*");
+      state.remote = true;
+      const remote = {}; for (const r of rows) remote[r.kit_id] = r;
+      // 本機有、雲端沒有的（例如之前離線按的）補上傳
+      for (const [id, r] of Object.entries(state.fb)) if (!remote[id]) saveRemote(id, r);
+      state.fb = { ...state.fb, ...remote };
+      saveLocal();
+    } catch { state.remote = false; }
     computeScores(kits);
     renderStatus(runs[0]);
     if (!kits.length) { showEmpty("資料庫還沒有資料。<br>到 GitHub → Actions → 手動執行一次每日更新。"); return; }
@@ -269,6 +389,12 @@ let qTimer;
 $("q").addEventListener("input", (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.q = e.target.value; applyFilters(); }, 200); });
 $("sort").addEventListener("change", (e) => { state.sort = e.target.value; applyFilters(); });
 $("minScore").addEventListener("change", (e) => { state.minScore = +e.target.value; applyFilters(); });
+$("showDis").addEventListener("change", (e) => { state.showDis = e.target.checked; applyFilters(); });
+$("grid").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-v]"); if (!b) return;
+  vote(b.closest(".card").dataset.id, +b.dataset.v);
+});
+$("learn").addEventListener("click", (e) => { if (e.target.id === "reorder") { applyFilters(); scrollTo(0, 0); } });
 $("hideOut").addEventListener("change", (e) => { state.hideOut = e.target.checked; applyFilters(); });
 $("status").addEventListener("click", () => $("statusDetail").classList.toggle("open"));
 new IntersectionObserver((es) => { if (es[0].isIntersecting && state.shown < state.view.length) renderMore(); },
