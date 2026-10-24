@@ -7,24 +7,21 @@ jobs:
       - name: probe
         run: |
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36"
+          out=""
           for u in \
-            "https://hobby.watch.impress.co.jp/docs/news/" \
-            "https://bandai-hobby.net/schedule/" \
-            "https://bandai-hobby.net/item/" \
-            "https://p-bandai.jp/hobby/" \
-            "https://www.kotobukiya.co.jp/product/" \
-            "https://www.goodsmile.com/ja/products" \
-            "https://www.hlj.com/" \
-            "https://www.amiami.com/eng/" \
-            "https://api.amiami.com/api/v1.0/items?pagemax=5&lang=eng" \
-            "https://www.nin-nin-game.com/en/" \
             "https://plazajapan.com/products.json?limit=5" \
             "https://www.gundamplanet.com/products.json?limit=5" \
             "https://www.newtype.us/products.json?limit=5" \
             "https://www.usagundamstore.com/products.json?limit=5" \
-            "https://www.hobbylinkjapan.com/" \
-            "https://www.1999.co.jp/eng/" ; do
+            "https://www.1999.co.jp/eng/" \
+            "https://www.hlj.com/search/?Word=plastic+model&GenreCode=Model+Kits&Page=1" \
+            "https://www.hlj.com/productsearch/?Page=1&MacroType=Model+Kits&ComingSoon=1" \
+            "https://www.hlj.com/robots.txt" \
+            "https://www.nin-nin-game.com/robots.txt" \
+            "https://hobby.watch.impress.co.jp/data/rss/1.0/hbw/feed.rdf" ; do
             r=$(curl -s -o /tmp/b -w "%{http_code} %{size_download}" -A "$UA" -L --max-time 25 "$u" || echo "ERR 0")
             cf=$(grep -c "Just a moment" /tmp/b 2>/dev/null || true)
-            echo "::notice title=probe::$r cf=$cf $u"
+            out="$out$r cf=$cf $u%0A"
           done
+          echo "::notice title=probe2::$out"
+          curl -s -A "$UA" https://www.hlj.com/robots.txt | head -40 | tr '\n' '|' | sed 's/^/::notice title=hljrobots::/'; echo
