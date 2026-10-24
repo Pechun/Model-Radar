@@ -8,9 +8,28 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r scraper/requirements.txt numpy
-      - name: HLJ dry run
+      - name: HLJ search structure
         run: |
-          DRY_RUN=1 NO_CLIP=1 MAX_PAGES=1 MAX_DETAIL=4 timeout 900 python scraper/scrape_hlj.py > out.txt 2>&1 || echo "exit $?" >> out.txt
-          tail -30 out.txt | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/^/::notice title=tail::/'
-          echo
-          grep -E "^\[(detail|error)" out.txt | head -20 | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/^/::notice title=detail::/'
+          python - <<'PY'
+          import sys, re
+          sys.path.insert(0, "scraper")
+          import scrape_hlj as s
+          from bs4 import BeautifulSoup
+          html = s.fetch(s.search_url("Science-Fiction", "Injection Kits", "reserve", 1))
+          soup = BeautifulSoup(html, "html.parser")
+          lines = []
+          for img in soup.find_all("img"):
+              src = img.get("data-src") or img.get("src") or ""
+              m = s.THUMB_RE.search(src)
+              if not m: continue
+              chain = []
+              p = img
+              for _ in range(7):
+                  p = p.parent
+                  if p is None: break
+                  chain.append(p.name + ("." + ".".join(p.get("class", [])) if p.get("class") else "") + ("#" + p["id"] if p.get("id") else ""))
+              lines.append(m.group(2) + " <- " + " < ".join(chain))
+          print("::notice title=n::" + str(len(lines)))
+          for i in range(0, min(len(lines), 60), 6):
+              print("::notice title=chain%d::" % i + "%0A".join(lines[i:i+6]))
+          PY
