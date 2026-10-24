@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="70%">
+      <stop offset="0" stop-color="#2a2420"/><stop offset="1" stop-color="#121417"/>
+    </radialGradient>
+    <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e8a33d" stop-opacity="0"/><stop offset="1" stop-color="#e8a33d" stop-opacity=".55"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g transform="translate(256 256)" fill="none" stroke="#e8a33d">
+    <circle r="190" stroke-width="10" stroke-opacity=".9"/>
+    <circle r="128" stroke-width="7" stroke-opacity=".55"/>
+    <circle r="66" stroke-width="6" stroke-opacity=".4"/>
+    <path d="M-190 0H190M0 -190V190" stroke-width="4" stroke-opacity=".3"/>
+    <path d="M0 0 L190 0 A190 190 0 0 0 134 -134 Z" fill="url(#sweep)" stroke="none" transform="rotate(-20)"/>
+    <line x1="0" y1="0" x2="178" y2="-65" stroke-width="9" stroke-linecap="round"/>
+  </g>
+  <!-- 重裝機甲頭部剪影（目標光點） -->
+  <g transform="translate(318 168)">
+    <circle r="54" fill="#e8a33d" opacity=".18"/>
+    <path d="M-30 18 L-30 -8 L-18 -24 L18 -24 L30 -8 L30 18 L18 30 L-18 30 Z" fill="#e8a33d"/>
+    <rect x="-20" y="-6" width="40" height="10" rx="2" fill="#121417"/>
+    <path d="M-22 -24 L-34 -44 M22 -24 L34 -44" stroke="#e8a33d" stroke-width="7" stroke-linecap="round"/>
+  </g>
+  <circle cx="256" cy="256" r="12" fill="#e8a33d"/>
+</svg>
