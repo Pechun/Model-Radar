@@ -8,28 +8,22 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r scraper/requirements.txt numpy
-      - name: HLJ search structure
+      - name: HLJ result counts
         run: |
           python - <<'PY'
-          import sys, re
+          import sys, re, time
           sys.path.insert(0, "scraper")
           import scrape_hlj as s
           from bs4 import BeautifulSoup
-          html = s.fetch(s.search_url("Science-Fiction", "Injection Kits", "reserve", 1))
-          soup = BeautifulSoup(html, "html.parser")
-          lines = []
-          for img in soup.find_all("img"):
-              src = img.get("data-src") or img.get("src") or ""
-              m = s.THUMB_RE.search(src)
-              if not m: continue
-              chain = []
-              p = img
-              for _ in range(7):
-                  p = p.parent
-                  if p is None: break
-                  chain.append(p.name + ("." + ".".join(p.get("class", [])) if p.get("class") else "") + ("#" + p["id"] if p.get("id") else ""))
-              lines.append(m.group(2) + " <- " + " < ".join(chain))
-          print("::notice title=n::" + str(len(lines)))
-          for i in range(0, min(len(lines), 60), 6):
-              print("::notice title=chain%d::" % i + "%0A".join(lines[i:i+6]))
+          out = []
+          for g in s.GENRES:
+              for kt in s.KIT_TYPES:
+                  for mode in s.MODES:
+                      html = s.fetch(s.search_url(g, kt, mode, 1)); time.sleep(1)
+                      t = BeautifulSoup(html, "html.parser").get_text(" ", strip=True)
+                      m = re.search(r"Showing\s+([\d,]+)\s+results?", t)
+                      nr = "NO RESULT" if re.search(r"no (results|items|products)|0 results|did not match", t, re.I) else ""
+                      out.append(f"{g}/{kt}/{mode}: {m.group(1) if m else '?'} {nr}")
+          for i in range(0, len(out), 14):
+              print("::notice title=c%d::" % i + "%0A".join(out[i:i+14]))
           PY
