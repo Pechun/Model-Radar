@@ -53,6 +53,9 @@
   .b { font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: #000c; color: #fff; }
   .b.re { background: #3b6ea8; } .b.out { background: #555; } .b.soon { background: var(--danger); }
   .b.dl { background: #000c; }
+  .score { position: absolute; top: 6px; right: 6px; font-size: 13px; font-weight: 800; padding: 2px 7px;
+    border-radius: 6px; background: #000d; color: var(--dim); }
+  .score.hi { color: var(--accent); } .score.mid { color: #f0c27a; }
   .body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
   .name { font-size: 13px; line-height: 1.35; font-weight: 600;
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -83,11 +86,18 @@
     </div>
     <input type="search" id="q" placeholder="搜尋名稱、廠商、作品…" autocomplete="off">
     <select id="sort">
+      <option value="style">外型契合度高→低</option>
       <option value="deadline">決定期限近→遠</option>
       <option value="release">發售日近→遠</option>
       <option value="newest">最新上架</option>
       <option value="price_asc">價格低→高</option>
       <option value="price_desc">價格高→低</option>
+    </select>
+    <select id="minScore">
+      <option value="0">全部</option>
+      <option value="50" selected>契合 ≥ 50</option>
+      <option value="70">契合 ≥ 70</option>
+      <option value="85">契合 ≥ 85</option>
     </select>
     <label class="chk"><input type="checkbox" id="hideOut">隱藏售完</label>
   </div>
@@ -106,13 +116,23 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // ================================================================================
 
 const PAGE = 48;
-const CAT_LABEL = { gundam: "ガンプラ他", mecha: "ロボット・特撮", figure: "フィギュア", news: "模型新聞", hobbywatch: "Hobby Watch" };
-const state = { all: [], view: [], shown: 0, tab: "all", q: "", sort: "deadline", hideOut: false };
+const CAT_LABEL = { gundam: "ガンプラ他", mecha: "ロボット・特撮", figure: "フィギュア", news: "模型新聞", hobbywatch: "Hobby Watch",
+  "Gundam": "鋼彈", "Science-Fiction": "科幻", "Figures": "角色" };
+const state = { all: [], view: [], shown: 0, tab: "all", q: "", sort: "style", hideOut: false, minScore: 50 };
 const $ = (id) => document.getElementById(id);
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const yen = (n) => (n == null ? "" : "¥" + n.toLocaleString("ja-JP"));
+const usd = (n) => (n == null ? "" : "US$" + Number(n).toFixed(2));
+const priceKey = (k) => k.price_jpy ?? (k.price_usd != null ? k.price_usd * 150 : null);
+// style_score → 0–100 百分位（在目前所有商品中的排名）
+function computeScores(kits) {
+  const s = kits.filter((k) => k.style_score != null).sort((a, b) => a.style_score - b.style_score);
+  const n = s.length;
+  s.forEach((k, i) => { k.pct = n > 1 ? Math.round((i / (n - 1)) * 100) : 50; });
+  kits.forEach((k) => { if (k.style_score == null) k.pct = null; });
+}
 const daysUntil = (iso) => {
   if (!iso) return null;
   const t = new Date(iso + "T00:00:00+09:00").getTime();
@@ -158,6 +178,7 @@ function applyFilters() {
   let v = state.all.filter((k) => {
     if (state.tab !== "all" && k.listing !== state.tab) return false;
     if (state.hideOut && k.sold_out) return false;
+    if (state.minScore > 0 && k.pct != null && k.pct < state.minScore) return false;
     if (q) {
       const hay = [k.name, k.maker, k.series, k.original_work, k.jan].join(" ").toLowerCase();
       if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
@@ -170,8 +191,9 @@ function applyFilters() {
                        || (a.release_date || far).localeCompare(b.release_date || far),
     release: (a, b) => (a.release_date || far).localeCompare(b.release_date || far),
     newest: (a, b) => (b.first_seen || "").localeCompare(a.first_seen || ""),
-    price_asc: (a, b) => (a.price_jpy ?? 1e9) - (b.price_jpy ?? 1e9),
-    price_desc: (a, b) => (b.price_jpy ?? -1) - (a.price_jpy ?? -1),
+    style: (a, b) => (b.pct ?? -1) - (a.pct ?? -1),
+    price_asc: (a, b) => (priceKey(a) ?? 1e9) - (priceKey(b) ?? 1e9),
+    price_desc: (a, b) => (priceKey(b) ?? -1) - (priceKey(a) ?? -1),
   }[state.sort];
   // 決定期限已過的排到後面
   if (state.sort === "deadline") {
@@ -194,16 +216,17 @@ function card(k) {
   if (k.is_rerelease) badges.push('<span class="b re">再販</span>');
   if (k.sold_out) badges.push('<span class="b out">售完</span>');
   if (d != null && d >= 0) badges.push(`<span class="b ${d <= 7 ? "soon" : "dl"}">${d === 0 ? "今天截止" : "剩 " + d + " 天"}</span>`);
-  const meta = [k.maker, k.original_work].filter(Boolean).join("・");
+  const meta = [k.maker, k.series || k.original_work].filter(Boolean).join("・");
+  const sc = k.pct == null ? "" : `<span class="score ${k.pct >= 85 ? "hi" : k.pct >= 60 ? "mid" : ""}">${k.pct}</span>`;
   const strike = k.list_price_jpy && k.price_jpy && k.list_price_jpy > k.price_jpy ? `<s>${yen(k.list_price_jpy)}</s>` : "";
   return `<a class="card" href="${esc(k.product_url)}" target="_blank" rel="noopener">
     <div class="img">${k.image_url ? `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(k.image_url)}" alt="">` : ""}
-      <div class="badges">${badges.join("")}</div></div>
+      <div class="badges">${badges.join("")}</div>${sc}</div>
     <div class="body">
       <div class="name">${esc(k.name)}</div>
       <div class="meta">${esc(meta || CAT_LABEL[k.category] || "")}</div>
       <div class="rel">發售 ${esc(k.release_text || "TBA")}</div>
-      <div class="row"><span class="price">${yen(k.price_jpy)}${strike}</span></div>
+      <div class="row"><span class="price">${k.price_jpy ? yen(k.price_jpy) + strike : usd(k.price_usd)}</span></div>
     </div></a>`;
 }
 
@@ -223,10 +246,11 @@ async function init() {
   }
   try {
     const [kits, runs] = await Promise.all([
-      api("kits?select=*&order=first_seen.desc"),
+      api("kits?select=*&source=neq.hobbywatch&order=first_seen.desc"),
       api("scrape_runs?select=*&order=started_at.desc&limit=1"),
     ]);
     state.all = kits;
+    computeScores(kits);
     renderStatus(runs[0]);
     if (!kits.length) { showEmpty("資料庫還沒有資料。<br>到 GitHub → Actions → 手動執行一次每日更新。"); return; }
     applyFilters();
@@ -244,6 +268,7 @@ $("tabs").addEventListener("click", (e) => {
 let qTimer;
 $("q").addEventListener("input", (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.q = e.target.value; applyFilters(); }, 200); });
 $("sort").addEventListener("change", (e) => { state.sort = e.target.value; applyFilters(); });
+$("minScore").addEventListener("change", (e) => { state.minScore = +e.target.value; applyFilters(); });
 $("hideOut").addEventListener("change", (e) => { state.hideOut = e.target.checked; applyFilters(); });
 $("status").addEventListener("click", () => $("statusDetail").classList.toggle("open"));
 new IntersectionObserver((es) => { if (es[0].isIntersecting && state.shown < state.view.length) renderMore(); },

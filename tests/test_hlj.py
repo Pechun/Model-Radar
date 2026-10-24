@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scraper"))
 import scrape_hlj as s  # noqa: E402
 
-SEARCH = """<html><body><div class="search-widget-blocks">
+SEARCH = """<html><body><p>Showing 142 results</p><aside><a href="/x-mhy1"><img src="/productthumbs/mhy/mhy1_0_1.jpg" alt="plush"></a></aside><div class="search-widget-blocks">
 <div class="item"><a href="/plamatea-pre-war-military-t-60-power-armor-fallout-gsc59075">
 <img src="https://www.hlj.com/productthumbs/gsc/gsc59075_0_1792640455.jpg?v=1792640455" alt="PLAMATEA Pre-war Military T-60 Power Armor (Fallout)"></a>
 <p><a href="/plamatea-pre-war-military-t-60-power-armor-fallout-gsc59075">PLAMATEA Pre-war Military T-60 Power Armor (Fallout)</a></p></div>
@@ -31,6 +31,11 @@ def test_search():
     assert items[0]["image_url"] == "https://www.hlj.com/productimages/gsc/gsc59075_0.jpg"
     assert items[0]["url"].endswith("gsc59075") and items[0]["url"].startswith("https://www.hlj.com/")
     assert items[1]["name"] == "1/20 P.K.A. Ausf L Leopard (Reissue)"
+
+
+def test_count():
+    assert s.result_count(SEARCH) == 142
+    assert s.result_count("<p>Showing 852,765 results</p>") == 852765
 
 
 def test_detail():

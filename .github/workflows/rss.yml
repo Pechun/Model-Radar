@@ -1,8 +1,7 @@
-name: 模型雷達 新聞更新
+name: 模型雷達 新聞（已停用排程）
 
 on:
-  schedule:
-    - cron: "17 */3 * * *"   # 每 3 小時一次（RSS 只保留最新幾十則，要常讀才不會漏）
+  # 已由 HLJ 取代，排程停用，只保留手動執行
   workflow_dispatch:
 
 jobs:

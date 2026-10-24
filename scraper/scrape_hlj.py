@@ -90,7 +90,8 @@ def parse_search(html: str) -> list[dict]:
         if len(t) > len(texts.get(h, "")):
             texts[h] = t
     out: dict[str, dict] = {}
-    for img in soup.find_all("img"):
+    scope = soup.select_one(".search-widget-blocks") or soup
+    for img in scope.find_all("img"):
         src = img.get("data-src") or img.get("data-original") or img.get("src") or ""
         m = THUMB_RE.search(src)
         if not m:
@@ -109,6 +110,11 @@ def parse_search(html: str) -> list[dict]:
             "image_url": f"{BASE}/productimages/{prefix}/{code}_0.jpg",
         }
     return list(out.values())
+
+
+def result_count(html: str) -> int | None:
+    m = re.search(r"Showing\s+([\d,]+)\s+results?", BeautifulSoup(html, "html.parser").get_text(" ", strip=True))
+    return int(m.group(1).replace(",", "")) if m else None
 
 
 def _field(text: str, *labels: str) -> str | None:
@@ -263,6 +269,9 @@ def main() -> int:
                         errors.append(f"search {genre}/{kt}/{mode} p{page}: {e}")
                         break
                     time.sleep(DELAY)
+                    total = result_count(html)
+                    if total is None or total > 5000:
+                        break  # 沒有符合的商品時 HLJ 會改顯示全站商品，直接跳過
                     items = parse_search(html)
                     fresh = [i for i in items if i["code"] not in found]
                     for i in fresh:

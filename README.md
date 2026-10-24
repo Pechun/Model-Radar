@@ -1,9 +1,10 @@
 # 模型雷達 Kit Radar — 第 1 期
 
-> **2026-10-23 更新：資料來源改為模型新聞 RSS**
-> 1999.co.jp 用 Cloudflare 擋住 GitHub 伺服器（回傳 403 驗證頁），原本的 1999 每日排程已停用（仍可手動執行）。
-> 現在由 `scraper/scrape_rss.py` 每 3 小時讀 Hobby Watch 的 RSS，只收組裝模型新品新聞，寫進同一個 `kits` 表（`source = hobbywatch`）。
-> 篩選關鍵字在 `scrape_rss.py` 的 `KIT_WORDS`／`SKIP_WORDS`／`STYLE_SKIP`；排程在 `.github/workflows/rss.yml`。
+> **2026-10-24 更新：主來源改為 HLJ（Hobby Link Japan）＋ CLIP 外型評分**
+> - 1999.co.jp 被 Cloudflare 擋、Hobby Watch 新聞太雜，兩者排程都已停用（仍可手動執行）。
+> - `scraper/scrape_hlj.py` 每天 05:37 / 17:37 讀 HLJ 的預購中＋近 30 天新增組裝套件（鋼彈／科幻／角色分類），抓發售日、預購截止日、價格、廠商。
+> - 每款商品的主圖跑 CLIP，跟 `scraper/taste.json` 的外型描述比對得到 `style_score`，網頁預設依「外型契合度」排序。
+> - 需先在 Supabase 執行一次 `supabase/migrate_02.sql`。
 
 每天自動抓 1999.co.jp（ホビーサーチ）的組裝模型新品與預約品，存進 Supabase，用手機網頁瀏覽。
 
