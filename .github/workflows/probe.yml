@@ -1,0 +1,9 @@
+name: 檢查收藏資料
+on: workflow_dispatch
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          r=$(curl -s -w " HTTP%{http_code}" "https://yidnwqdzuduvfvmiwpdp.supabase.co/rest/v1/kit_feedback?select=kit_id,vote,name,updated_at" -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZG53cWR6dWR1dmZ2bWl3cGRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NzM4MjcsImV4cCI6MjEwNjM0OTgyN30.Xa1_T7OIpGriYQmV9mKOt9yQKMgKGZ4Y3hQAPEofb-A" -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZG53cWR6dWR1dmZ2bWl3cGRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NzM4MjcsImV4cCI6MjEwNjM0OTgyN30.Xa1_T7OIpGriYQmV9mKOt9yQKMgKGZ4Y3hQAPEofb-A")
+          echo "::notice title=fb::$(echo "$r" | head -c 3000)"
