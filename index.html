@@ -434,5 +434,14 @@ document.addEventListener("visibilitychange", async () => {
   if (Date.now() - lastCheck > 30 * 60 * 1000) { lastCheck = Date.now(); init(); }
 });
 </script>
+<script>
+/* 自動更新：打開或切回 App 時檢查 version.json，版本不同就重新載入（規格見 README） */
+(function(){var V='2026-10-27-1',last=0;
+function check(){if(Date.now()-last<60000)return;last=Date.now();
+ fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(j){
+  if(j&&j.v&&j.v!==V){var k='au-reload-'+j.v;try{if(sessionStorage.getItem(k))return;sessionStorage.setItem(k,'1')}catch(e){}
+   location.replace(location.pathname+'?v='+encodeURIComponent(j.v))}}).catch(function(){})}
+check();document.addEventListener('visibilitychange',function(){if(!document.hidden)check()});})();
+</script>
 </body>
 </html>

@@ -69,3 +69,6 @@ pip install -r scraper/requirements.txt
 python tests/test_parse.py
 $env:DRY_RUN="1"; $env:MAX_DETAIL="5"; python scraper/scrape_1999.py   # 不寫資料庫
 ```
+
+## 自動更新（給 Claude）
+修改網頁時，同時把網頁裡自動更新區塊的 `V` 和 `version.json` 的 `v` 改成同一個新值（例如 `2026-11-02-1`）。手機打開或切回 App 時發現版本不同，會自動重新載入，不用重新加入主畫面。
