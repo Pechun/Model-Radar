@@ -66,6 +66,7 @@
   .b { font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: #000c; color: #fff; }
   .b.re { background: #3b6ea8; } .b.out { background: #555; } .b.soon { background: var(--danger); }
   .b.dl { background: #000c; }
+  .b.new { background: var(--accent); color: #1a1a1a; }
   .score { position: absolute; top: 6px; right: 6px; font-size: 13px; font-weight: 800; padding: 2px 7px;
     border-radius: 6px; background: #000d; color: var(--dim); }
   .score.hi { color: var(--accent); } .score.mid { color: #f0c27a; }
@@ -158,6 +159,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const yen = (n) => (n == null ? "" : "¥" + n.toLocaleString("ja-JP"));
 const usd = (n) => (n == null ? "" : "US$" + Number(n).toFixed(2));
+const isFresh = (k) => !!k.first_seen && Date.now() - new Date(k.first_seen).getTime() < 24 * 3600 * 1000;
 const priceKey = (k) => (k.source !== "hlj" ? k.price_jpy : null) ?? (k.price_usd != null ? k.price_usd * 150 : null);
 // ---- 收藏（保留 CLIP 相似度程式，目前權重 w = 0，不影響排序） ----
 function decodeEmb(b64) {
@@ -314,10 +316,13 @@ function applyFilters() {
       return ea - eb || cmp(a, b);
     });
   } else v.sort(cmp);
+  // 近 24 小時新上架的一律排最前面（區塊內仍照所選排序）
+  v.sort((a, b) => isFresh(b) - isFresh(a));
   state.view = v;
   state.shown = 0;
   $("grid").innerHTML = "";
-  $("count").textContent = `${v.length} 款`;
+  const nf = v.filter(isFresh).length;
+  $("count").textContent = `${v.length} 款${nf ? `・今日新增 ${nf} 款（排在最前面）` : "・今日沒有新增"}`;
   renderMore();
 }
 
@@ -327,6 +332,7 @@ function card(k) {
   if (k.is_rerelease) badges.push('<span class="b re">再販</span>');
   if (k.sold_out) badges.push('<span class="b out">售完</span>');
   if (d != null && d >= 0) badges.push(`<span class="b ${d <= 7 ? "soon" : "dl"}">${d === 0 ? "今天截止" : "剩 " + d + " 天"}</span>`);
+  if (isFresh(k)) badges.unshift('<span class="b new">今日新增</span>');
   const meta = [k.maker, k.series || k.original_work].filter(Boolean).join("・");
   const sc = k.pct == null ? "" : `<span class="score ${k.pct >= 85 ? "hi" : k.pct >= 60 ? "mid" : ""}">${k.pct}</span>`;
   const strike = k.list_price_jpy && k.price_jpy && k.list_price_jpy > k.price_jpy ? `<s>${yen(k.list_price_jpy)}</s>` : "";
@@ -436,7 +442,7 @@ document.addEventListener("visibilitychange", async () => {
 </script>
 <script>
 /* 自動更新：打開或切回 App 時檢查 version.json，版本不同就重新載入（規格見 README） */
-(function(){var V='2026-10-27-1',last=0;
+(function(){var V='2026-10-28-1',last=0;
 function check(){if(Date.now()-last<60000)return;last=Date.now();
  fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(j){
   if(j&&j.v&&j.v!==V){var k='au-reload-'+j.v;try{if(sessionStorage.getItem(k))return;sessionStorage.setItem(k,'1')}catch(e){}
